@@ -82,13 +82,13 @@ def is_good_photo(img, width, height, mean, sliding_window):
     return False
 
 # call each time you  have a new frame
-def on_new_frame(cv_mat, engine, mean, sliding_window, send_over_ws, cam_sockets):
+def on_new_frame(cv_mat, engine, mean, sliding_window, send_over_ws, cam_sockets, wait):
     img_pil = Image.fromarray(cv_mat)
 
     width, height = img_pil.size
 
     is_good_frame = is_good_photo(cv_mat, width, height, mean, sliding_window)
-    if (is_good_frame):
+    if is_good_frame or not wait:
         # NOTE: Teachable Machine 2 works on images of size 224x224 and will resize all inputs
         # to that size. so we have to make sure our edgetpu converted model is fed similar images.
         if (width, height) != (224, 224):
@@ -103,6 +103,8 @@ def on_new_frame(cv_mat, engine, mean, sliding_window, send_over_ws, cam_sockets
 
 
         elif (mode == 'sort'):
+            engine = None
+            print("We are in training mode now")
             classification_result = engine.ClassifyWithImage(img_pil)
             print(classification_result)
             if classification_result [0][0] == 0 and  classification_result[0][1] > 0.95:
@@ -119,6 +121,10 @@ if __name__ == '__main__':
     mode_parser.add_argument('--train', dest='will_sort', action='store_false')
     mode_parser.add_argument('--sort', dest='will_sort', action='store_true')
 
+    mode_parser = parser.add_mutually_exclusive_group(required=False)
+    mode_parser.add_argument('--ws-wait', dest='ws_will_wait_for_image', action='store_true')
+    mode_parser.add_argument('--ws-instant', dest='ws_will_wait_for_image', action='store_false')
+
     filter_parse = parser.add_mutually_exclusive_group(required=False)
     filter_parse.add_argument('--zone-activation', dest='zone', action='store_true')
     filter_parse.add_argument('--biquad', dest='biquad', action='store_true')
@@ -130,7 +136,7 @@ if __name__ == '__main__':
     camera_parse.add_argument('--opencv', dest='opencv', action='store_true')
     camera_parse.add_argument('--arducam', dest='arducam', action='store_true')
 
-    parser.set_defaults(will_sort=True)
+    parser.set_defaults(will_sort=True, ws_will_wait_for_image=True)
     args = parser.parse_args()
 
     # Start the tornado websocket server
@@ -144,6 +150,8 @@ if __name__ == '__main__':
         mode = "sort"
     else:
         mode = "train"
+
+    wait = args.ws_will_wait_for_image
 
     #  parse filter type
     if args.zone: filter_type = 'zone'
@@ -170,11 +178,11 @@ if __name__ == '__main__':
             if  not ret:
                 break
             cv2_im  = frame
-            pil_im = Image.fromArray(cv2_im)
-            pil_im.resize(224, 224)
+            pil_im = Image.fromarray(cv2_im)
+            pil_im.resize((224, 224))
             pil_im.transpose(Image.FLIP_LEFT_RIGHT)
             cv2.imshow('frame', cv2_im)
-            on_new_frame(engine, mean, sliding_window, send_over_ws, cam_sockets)
+            on_new_frame(cv2_im, engine, mean, sliding_window, send_over_ws, cam_sockets, wait)
             if cv2.waitKey(1) & 0xff  == ord('q'):
                 break
         cap.release()
