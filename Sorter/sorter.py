@@ -103,8 +103,6 @@ def on_new_frame(cv_mat, engine, mean, sliding_window, send_over_ws, cam_sockets
 
 
         elif (mode == 'sort'):
-            engine = None
-            print("We are in training mode now")
             classification_result = engine.ClassifyWithImage(img_pil)
             print(classification_result)
             if classification_result [0][0] == 0 and  classification_result[0][1] > 0.95:
@@ -149,6 +147,8 @@ if __name__ == '__main__':
         engine = edgetpu.classification.engine.ClassificationEngine(model_path)
         mode = "sort"
     else:
+        engine = None
+        print("We are in training mode now")
         mode = "train"
 
     wait = args.ws_will_wait_for_image
